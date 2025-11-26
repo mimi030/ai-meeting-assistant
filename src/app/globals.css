@@ -1,0 +1,289 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Expert Yellow Theme - Optimized for Readability & UX */
+  --background: #fffef7; /* Warm off-white - easier on eyes than pure yellow */
+  --navbar-bg: #ffda03; /* Your preferred main yellow */
+  --foreground: #1a1a1a; /* High contrast dark text */
+  --primary: #ffbc00; /* Your preferred yellow for CTAs*/
+  --primary-hover: #e6c400; /* Darker yellow for hover states */
+  --secondary: #ffa726; /* Complementary orange-yellow */
+  --accent: #fde992; /* Your preferred light yellow for accents */
+  --card-bg: #ffffff; /* Pure white for content readability */
+  --card-border: #fde992; /* Light yellow borders */
+  --text-primary: #1a1a1a; /* Maximum contrast for headings */
+  --text-secondary: #333333; /* Dark gray for body text */
+  --text-muted: #666666; /* Medium gray for secondary info */
+  --border-color: #fde992; /* Consistent light yellow */
+  --highlight: #ffda03; /* Main yellow for highlights */
+  --nav-hover: #e6c400; /* Darker hover state */
+  --nav-text: #1a1a1a; /* Dark text on yellow navbar */
+  --nav-text-hover: #ffffff; /* White text on dark hover */
+  --form-card: #fff3c0; /* Your preferred light yellow for forms */
+  --form-title: #b8860b; /* Dark goldenrod for form titles */
+  --input-text: #1a1a1a; /* Dark text in inputs */
+  --success: #4caf50; /* Green for success */
+  --warning: #ff9800; /* Orange for warnings */
+  --error: #f44336; /* Red for errors */
+  --shadow: rgba(253, 233, 146, 0.3); /* Soft yellow shadows */
+  --focus-ring: rgba(255, 218, 3, 0.4); /* Yellow focus rings */
+}
+
+body {
+  color: var(--text-primary);
+  background: var(--background);
+  font-family: Arial, Helvetica, sans-serif;
+  line-height: 1.6;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Typography */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+p,
+span {
+  color: var(--text-secondary);
+}
+
+div {
+  color: inherit;
+}
+
+label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* Custom component styles */
+.card {
+  @apply rounded-lg shadow-md border;
+  background-color: var(--card-bg);
+  border-color: var(--card-border);
+  border-width: 1px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.btn-primary {
+  @apply py-2 px-4 rounded-md transition-colors;
+  background-color: var(--primary);
+  color: white;
+  font-weight: 700;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.btn-primary:hover {
+  background-color: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.btn-secondary {
+  @apply py-2 px-4 rounded-md transition-colors border;
+  background-color: var(--card-bg);
+  border-color: var(--card-border);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.btn-secondary:hover {
+  background-color: var(--background);
+  border-color: var(--secondary);
+}
+
+.link {
+  color: var(--primary);
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.link:hover {
+  color: var(--primary-hover);
+  text-decoration: underline;
+}
+
+/* Form elements */
+input,
+textarea,
+select {
+  @apply border rounded-md p-2;
+  background-color: white;
+  border-color: var(--border-color);
+  color: var(--text-primary);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  @apply outline-none ring-2;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(0, 129, 211, 0.2);
+}
+
+/* Details/summary elements */
+details summary {
+  color: var(--primary);
+  cursor: pointer;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+details summary:hover {
+  color: var(--primary-hover);
+}
+
+/* Navbar styling */
+.navbar {
+  background-color: var(--navbar-bg);
+  border-bottom: 1px solid var(--card-border);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.navbar a.nav-brand {
+  font-weight: 900;
+}
+
+.navbar a.nav-brand:hover {
+  background-color: transparent;
+}
+
+.navbar a {
+  color: var(--nav-text);
+  transition: all 0.2s ease;
+  position: relative;
+  font-weight: 500;
+}
+
+.navbar a:hover {
+  background-color: var(--nav-hover);
+  color: var(--nav-text-hover);
+}
+
+/* Status badges */
+.status-badge {
+  @apply px-2 py-1 rounded-full text-xs font-medium;
+  transition: opacity 0.2s;
+}
+
+.status-badge.complete {
+  background-color: var(--secondary);
+  color: white;
+}
+
+.status-badge.in-progress {
+  background-color: var(--primary);
+  color: white;
+}
+
+/* Page transitions */
+.page-transition {
+  transition: opacity 0.3s ease;
+}
+
+/* Section headings */
+.section-heading {
+  border-bottom: 2px solid var(--border-color);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Form styling */
+.form-card {
+  background-color: var(--form-card);
+}
+
+.form-title {
+  color: var(--form-title);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  margin-bottom: 1.5rem;
+  border-bottom: 2px solid var(--border-color);
+  padding-bottom: 0.5rem;
+}
+
+input,
+textarea,
+select {
+  @apply border rounded-md p-2;
+  background-color: white;
+  border-color: var(--border-color);
+  color: var(--text-muted); /* Default color before typing */
+  transition: border-color 0.2s, box-shadow 0.2s, color 0.2s;
+}
+
+input:focus,
+textarea:focus,
+select:focus,
+input:not(:placeholder-shown),
+textarea:not(:placeholder-shown),
+select:not(:placeholder-shown) {
+  @apply outline-none;
+  border-color: var(--primary);
+  color: var(--input-text); /* Dark gray when typing or with content */
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  box-shadow: 0 0 0 2px rgba(0, 129, 211, 0.2);
+}
+
+/* Generated content styling - general */
+.generated-content {
+  color: var(--input-text); /* Same dark gray as input text */
+  white-space: pre-wrap;
+  line-height: 1.7;
+  background-color: transparent; /* Ensure no background by default */
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+}
+
+/* Meeting panel specific styling */
+.meeting-panel {
+  @apply rounded-lg shadow-md border p-6;
+  background-color: #fff8dc; /* Cornsilk - light yellow that's easy to read */
+  border-color: #daa520; /* Golden rod */
+  border-width: 1px;
+}
+
+.meeting-panel h1,
+.meeting-panel h2,
+.meeting-panel h3 {
+  color: #8b4513; /* SaddleBrown - dark brown that contrasts well with yellow */
+  font-weight: 600;
+}
+
+.meeting-panel .generated-content {
+  color: #333333; /* Dark gray for good readability */
+  background-color: rgba(255, 255, 255, 0.5); /* Semi-transparent white */
+  padding: 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(218, 165, 32, 0.3); /* Subtle golden rod border */
+}
+
+/* Agenda specific styling */
+.agenda-border {
+  border: 2px solid var(--border-color);
+  background-color: rgba(255, 255, 255, 0.7);
+}

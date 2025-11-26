@@ -1,0 +1,63 @@
+# Version control
+.git
+.gitignore
+.github
+
+# Dependencies
+node_modules
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+.pnpm-debug.log
+
+# Build outputs
+.next
+out
+dist
+build
+.vercel
+
+# Environment variables
+.env*
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Docker related
+Dockerfile
+.dockerignore
+docker-compose*
+
+# Development tools
+.vscode
+.idea
+*.sublime-*
+.DS_Store
+*.log
+*.swp
+*.bak
+
+# Testing
+coverage
+.nyc_output
+test-results
+__tests__
+*.test.js
+*.test.ts
+*.test.tsx
+*.spec.js
+*.spec.ts
+*.spec.tsx
+jest.setup.js
+jest.config.js
+
+# Misc
+README.md
+LICENSE
+*.md
+.eslintrc*
+.prettierrc*
+.editorconfig
+jest.config.*
+tsconfig.tsbuildinfo
