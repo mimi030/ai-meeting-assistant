@@ -94,6 +94,7 @@ export async function POST(req: NextRequest) {
       description,
       topics,
       agenda,
+      status: 'in_progress' as const,
       createdAt: now,
       updatedAt: now,
     };
