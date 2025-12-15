@@ -52,6 +52,12 @@ export async function PUT(
         { status: 400 }
       );
     }
+
+    if (error instanceof Error && error.message.includes('not found')) {
+      return NextResponse.json({ error: error.message }, { status: 404 });
+    }
+
+    console.error('Error updating meeting:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -67,7 +73,11 @@ export async function DELETE(
     await deleteMeeting(params.id);
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error updating meeting:', error);
+    if (error instanceof Error && error.message.includes('not found')) {
+      return NextResponse.json({ error: error.message }, { status: 404 });
+    }
+
+    console.error('Error deleting meeting:', error);
     return NextResponse.json(
       { error: 'Failed to delete meeting' },
       { status: 500 }

@@ -7,7 +7,8 @@ import { listMeetings } from '@/lib/dynamodb';
 export const dynamic = 'force-dynamic';
 
 export default async function MeetingsPage() {
-  const meetings = await listMeetings();
+  const result = await listMeetings();
+  const meetings = result.meetings;
 
   return (
     <div className="min-h-screen py-12">

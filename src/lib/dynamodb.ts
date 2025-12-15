@@ -3,26 +3,60 @@
  * It contains functions to interact with DynamoDB, including creating a table,
  * inserting items, and querying items.
  */
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  DynamoDBClient,
+  ConditionalCheckFailedException,
+} from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
   PutCommand,
   GetCommand,
-  ScanCommand,
+  QueryCommand,
+  UpdateCommand,
   DeleteCommand,
 } from '@aws-sdk/lib-dynamodb';
 
-// Initialize the DynamoDB client
-const client = new DynamoDBClient({
-  region: process.env.AWS_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-    sessionToken: process.env.AWS_SESSION_TOKEN || undefined,
-  },
-});
+// Lazy initialization of DynamoDB client
+let client: DynamoDBClient | null = null;
+let docClient: DynamoDBDocumentClient | null = null;
 
-const docClient = DynamoDBDocumentClient.from(client);
+function getDynamoDBClient(): DynamoDBClient {
+  if (!client) {
+    const region = process.env.AWS_REGION;
+    const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+
+    // Validate credentials
+    if (!region || !accessKeyId || !secretAccessKey) {
+      throw new Error(
+        'Missing AWS credentials. Please set AWS_REGION, AWS_ACCESS_KEY_ID, and AWS_SECRET_ACCESS_KEY environment variables.'
+      );
+    }
+
+    client = new DynamoDBClient({
+      region,
+      credentials: {
+        accessKeyId,
+        secretAccessKey,
+        // Only include sessionToken if it's provided and not empty
+        ...(process.env.AWS_SESSION_TOKEN &&
+        process.env.AWS_SESSION_TOKEN.trim() !== ''
+          ? { sessionToken: process.env.AWS_SESSION_TOKEN }
+          : {}),
+      },
+      maxAttempts: 3,
+      retryMode: 'adaptive',
+    });
+  }
+  return client;
+}
+
+function getDynamoDBDocClient(): DynamoDBDocumentClient {
+  if (!docClient) {
+    docClient = DynamoDBDocumentClient.from(getDynamoDBClient());
+  }
+  return docClient;
+}
 
 export const TableName = process.env.DYNAMODB_TABLE_NAME || 'ai_meeting_tool';
 
@@ -37,6 +71,7 @@ export interface Meeting {
   summary?: string;
   actionItems?: string;
   transcriptUrl?: string;
+  status: 'in_progress' | 'complete';
   createdAt: string;
   updatedAt: string;
 }
@@ -44,18 +79,22 @@ export interface Meeting {
 // Create a new meeting
 export async function createMeeting(meeting: Meeting) {
   try {
-    // Validate table name
     if (!TableName) {
       throw new Error('DynamoDB table name is not defined');
     }
 
+    const meetingWithStatus = {
+      ...meeting,
+      status: meeting.status || 'in_progress',
+    };
+
     const command = new PutCommand({
       TableName,
-      Item: meeting,
+      Item: meetingWithStatus,
     });
 
-    await docClient.send(command);
-    return meeting;
+    await getDynamoDBDocClient().send(command);
+    return meetingWithStatus;
   } catch (error) {
     console.error('Error creating meeting in DynamoDB:', error);
     throw error;
@@ -70,7 +109,7 @@ export async function getMeeting(id: string) {
       Key: { id },
     });
 
-    const response = await docClient.send(command);
+    const response = await getDynamoDBDocClient().send(command);
     return response.Item as Meeting | undefined;
   } catch (error) {
     console.error('Error getting meeting from DynamoDB:', error);
@@ -78,29 +117,65 @@ export async function getMeeting(id: string) {
   }
 }
 
-// List all meetings
-export async function listMeetings() {
+// List all meetings with pagination
+export async function listMeetings(
+  limit: number = 20,
+  paginationState?: {
+    inProgressKey?: Record<string, unknown>;
+    completeKey?: Record<string, unknown>;
+  }
+) {
   try {
-    const command = new ScanCommand({
+    const queryLimit = Math.ceil(limit / 2);
+
+    const inProgressCommand = new QueryCommand({
       TableName,
+      IndexName: 'status-createdAt-index',
+      Limit: queryLimit,
+      ExclusiveStartKey: paginationState?.inProgressKey,
+      KeyConditionExpression: '#status = :status',
+      ExpressionAttributeNames: { '#status': 'status' },
+      ExpressionAttributeValues: { ':status': 'in_progress' },
+      ScanIndexForward: false,
     });
 
-    const response = await docClient.send(command);
-    const meetings = (response.Items || []) as Meeting[];
+    const completeCommand = new QueryCommand({
+      TableName,
+      IndexName: 'status-createdAt-index',
+      Limit: queryLimit,
+      ExclusiveStartKey: paginationState?.completeKey,
+      KeyConditionExpression: '#status = :status',
+      ExpressionAttributeNames: { '#status': 'status' },
+      ExpressionAttributeValues: { ':status': 'complete' },
+      ScanIndexForward: false,
+    });
 
-    // Sort by status (In Progress first) then by date (newest first)
-    return meetings.sort((a, b) => {
-      // Status priority: In Progress (no notes) > Complete (has notes)
-      const aStatus = a.notes ? 1 : 0; // 0 = In Progress, 1 = Complete
-      const bStatus = b.notes ? 1 : 0;
+    const docClient = getDynamoDBDocClient();
+    const [inProgress, complete] = await Promise.all([
+      docClient.send(inProgressCommand),
+      docClient.send(completeCommand),
+    ]);
 
-      if (aStatus !== bStatus) {
-        return aStatus - bStatus; // In Progress first
-      }
+    const allMeetings = [
+      ...(inProgress.Items || []),
+      ...(complete.Items || []),
+    ] as Meeting[];
 
-      // Same status, sort by date (newest first)
+    allMeetings.sort((a, b) => {
+      const statusOrder = { in_progress: 0, complete: 1 };
+      const statusDiff = statusOrder[a.status] - statusOrder[b.status];
+      if (statusDiff !== 0) return statusDiff;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
+
+    return {
+      meetings: allMeetings.slice(0, limit),
+      paginationState: {
+        inProgressKey: inProgress.LastEvaluatedKey,
+        completeKey: complete.LastEvaluatedKey,
+      },
+      hasMore: !!(inProgress.LastEvaluatedKey || complete.LastEvaluatedKey),
+    };
   } catch (error) {
     console.error('Error listing meetings from DynamoDB:', error);
     throw error;
@@ -110,28 +185,58 @@ export async function listMeetings() {
 // Update a meeting
 export async function updateMeeting(id: string, updates: Partial<Meeting>) {
   try {
-    // First get the existing meeting
-    const existingMeeting = await getMeeting(id);
-    if (!existingMeeting) {
-      throw new Error(`Meeting with ID ${id} not found`);
+    if (!updates || Object.keys(updates).length === 0) {
+      throw new Error('No updates provided');
     }
 
-    // Create updated meeting
-    const updatedMeeting = {
-      ...existingMeeting,
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    };
+    const updateExpression: string[] = [];
+    const expressionAttributeNames: Record<string, string> = {};
+    const expressionAttributeValues: Record<string, unknown> = {};
 
-    // Save it back to DynamoDB
-    const command = new PutCommand({
-      TableName,
-      Item: updatedMeeting,
+    Object.keys(updates).forEach((key, index) => {
+      if (key !== 'id') {
+        const nameKey = `#attr${index}`;
+        const valueKey = `:val${index}`;
+        updateExpression.push(`${nameKey} = ${valueKey}`);
+        expressionAttributeNames[nameKey] = key;
+        expressionAttributeValues[valueKey] = updates[key as keyof Meeting];
+      }
     });
 
-    await docClient.send(command);
-    return updatedMeeting;
+    if (updates.notes !== undefined) {
+      const statusKey = `#status`;
+      const statusValue =
+        updates.notes && updates.notes.trim().length > 0
+          ? ':complete'
+          : ':in_progress';
+      updateExpression.push(`${statusKey} = ${statusValue}`);
+      expressionAttributeNames[statusKey] = 'status';
+      expressionAttributeValues[statusValue] =
+        updates.notes && updates.notes.trim().length > 0
+          ? 'complete'
+          : 'in_progress';
+    }
+
+    updateExpression.push('#updatedAt = :updatedAt');
+    expressionAttributeNames['#updatedAt'] = 'updatedAt';
+    expressionAttributeValues[':updatedAt'] = new Date().toISOString();
+
+    const command = new UpdateCommand({
+      TableName,
+      Key: { id },
+      UpdateExpression: `SET ${updateExpression.join(', ')}`,
+      ExpressionAttributeNames: expressionAttributeNames,
+      ExpressionAttributeValues: expressionAttributeValues,
+      ReturnValues: 'ALL_NEW',
+      ConditionExpression: 'attribute_exists(id)',
+    });
+
+    const response = await getDynamoDBDocClient().send(command);
+    return response.Attributes as Meeting;
   } catch (error) {
+    if (error instanceof ConditionalCheckFailedException) {
+      throw new Error(`Meeting with ID ${id} not found`);
+    }
     console.error('Error updating meeting in DynamoDB:', error);
     throw error;
   }
@@ -143,10 +248,14 @@ export async function deleteMeeting(id: string) {
     const command = new DeleteCommand({
       TableName,
       Key: { id },
+      ConditionExpression: 'attribute_exists(id)',
     });
-    await docClient.send(command);
+    await getDynamoDBDocClient().send(command);
     return true;
   } catch (error) {
+    if (error instanceof ConditionalCheckFailedException) {
+      throw new Error(`Meeting with ID ${id} not found`);
+    }
     console.error('Error deleting meeting from DynamoDB:', error);
     throw error;
   }

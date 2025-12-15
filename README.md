@@ -15,40 +15,45 @@ Generate meeting agendas and summaries with AI-powered assistance. This applicat
 ### Required Services
 
 #### 1. OpenAI API
+
 - [Get API Key](https://platform.openai.com/api-keys)
 - Create account and generate secret key
 - Keep key secure (never commit to git)
 
 #### 2. AWS Account
+
 You'll need to set up the following AWS resources:
 
 **Required:**
+
 - S3 bucket for transcript storage
 - DynamoDB table for meeting data
 - IAM user with appropriate permissions
 - CORS configuration on S3 bucket
 
 **Optional:**
+
 - CloudWatch for monitoring (recommended)
 - AWS CloudTrail for audit logging
 
 ### Local Development
-- **Node.js** 20+ 
+
+- **Node.js** 20+
 - **npm** or **yarn**
 - **Docker** (for containerized local deployment)
 - **AWS CLI** (optional, for AWS setup via command line)
 
 ## 🛠️ Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | Next.js 14, React, Tailwind CSS |
-| Backend | Next.js API Routes |
-| Database | AWS DynamoDB |
-| Storage | AWS S3 |
-| AI | OpenAI API |
-| Validation | Zod |
-| Container | Docker |
+| Layer      | Technology                      |
+| ---------- | ------------------------------- |
+| Frontend   | Next.js 14, React, Tailwind CSS |
+| Backend    | Next.js API Routes              |
+| Database   | AWS DynamoDB                    |
+| Storage    | AWS S3                          |
+| AI         | OpenAI API                      |
+| Validation | Zod                             |
+| Container  | Docker                          |
 
 ---
 
@@ -59,6 +64,7 @@ You'll need to set up the following AWS resources:
 This section guides you through setting up all AWS resources needed for both **local Docker deployment** and **Vercel production deployment**.
 
 **Resources to create:**
+
 1. ✅ S3 Bucket (for transcripts)
 2. ✅ DynamoDB Table (for meeting data)
 3. ✅ IAM User (for credentials)
@@ -180,6 +186,62 @@ Check for `"TableStatus": "ACTIVE"`
 
 ---
 
+### Step 4b: Create Global Secondary Index (GSI)
+
+The application uses a GSI to efficiently query meetings by status. Create this index after the table is active.
+
+#### Via AWS Console
+
+1. Go to [DynamoDB Console](https://console.aws.amazon.com/dynamodb/) → Your table
+2. Click **Indexes** tab
+3. Click **Create index**
+4. **Partition key:** `status` (String)
+5. **Sort key:** `createdAt` (String)
+6. **Index name:** `status-createdAt-index`
+7. **Projection type:** All attributes
+8. Click **Create index**
+9. Wait for index status to show **Active** (usually 2-5 minutes)
+
+#### Via AWS CLI
+
+```bash
+aws dynamodb update-table \
+  --table-name your_dynamodb_table_name \
+  --attribute-definitions \
+    AttributeName=status,AttributeType=S \
+    AttributeName=createdAt,AttributeType=S \
+  --global-secondary-index-updates \
+    "[{\"Create\":{\"IndexName\":\"status-createdAt-index\",\"KeySchema\":[{\"AttributeName\":\"status\",\"KeyType\":\"HASH\"},{\"AttributeName\":\"createdAt\",\"KeyType\":\"RANGE\"}],\"Projection\":{\"ProjectionType\":\"ALL\"}}}]" \
+  --region us-east-1#### Verify GSI Created
+
+aws dynamodb describe-table --table-name your_dynamodb_table_name --region us-east-1 | grep -A 10 "GlobalSecondaryIndexes"
+# Look for `"IndexStatus": "ACTIVE"` in the output.
+```
+
+#### Table Schema
+
+The DynamoDB table stores meetings with the following structure:
+
+- **Primary Key:** `id` (String) - Unique meeting identifier
+- **Required Fields:**
+  - `id` (String)
+  - `title` (String)
+  - `topics` (String)
+  - `status` (String) - Either `"in_progress"` or `"complete"`
+  - `createdAt` (String) - ISO 8601 timestamp
+  - `updatedAt` (String) - ISO 8601 timestamp
+- **Optional Fields:**
+  - `description` (String)
+  - `agenda` (String)
+  - `notes` (String)
+  - `summary` (String)
+  - `actionItems` (String)
+  - `transcriptUrl` (String)
+
+**Note:** The `status` field is required for the GSI to work properly. New meetings are automatically created with `status: "in_progress"`. The status automatically changes to `"complete"` when notes are added to a meeting.
+
+---
+
 ### Step 5: Create IAM User with Permissions
 
 #### Via AWS Console
@@ -233,6 +295,7 @@ aws iam attach-user-policy \
    - **Secret Access Key**
 
 Store these securely:
+
 ```
 Access Key ID:     AKIA...
 Secret Access Key: wJa...
@@ -264,11 +327,7 @@ For tighter security, create a custom policy instead of using full S3/DynamoDB a
     {
       "Sid": "S3TranscriptAccess",
       "Effect": "Allow",
-      "Action": [
-        "s3:GetObject",
-        "s3:PutObject",
-        "s3:DeleteObject"
-      ],
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
       "Resource": "arn:aws:s3:::your_s3_bucket_name/*"
     },
     {
@@ -314,17 +373,17 @@ Use this configuration for both environments:
 
 ```json
 [
-    {
-        "AllowedHeaders": ["*"],
-        "AllowedMethods": ["PUT", "POST", "GET"],
-        "AllowedOrigins": [
-            "https://your-vercel-url.vercel.app",
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "http://0.0.0.0:3000"
-        ],
-        "ExposeHeaders": []
-    }
+  {
+    "AllowedHeaders": ["*"],
+    "AllowedMethods": ["PUT", "POST", "GET"],
+    "AllowedOrigins": [
+      "https://your-vercel-url.vercel.app",
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+      "http://0.0.0.0:3000"
+    ],
+    "ExposeHeaders": []
+  }
 ]
 ```
 
@@ -338,16 +397,16 @@ If you only want to test locally:
 
 ```json
 [
-    {
-        "AllowedHeaders": ["*"],
-        "AllowedMethods": ["PUT", "POST", "GET"],
-        "AllowedOrigins": [
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "http://0.0.0.0:3000"
-        ],
-        "ExposeHeaders": []
-    }
+  {
+    "AllowedHeaders": ["*"],
+    "AllowedMethods": ["PUT", "POST", "GET"],
+    "AllowedOrigins": [
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+      "http://0.0.0.0:3000"
+    ],
+    "ExposeHeaders": []
+  }
 ]
 ```
 
@@ -357,14 +416,12 @@ When ready for production, restrict to Vercel URL only:
 
 ```json
 [
-    {
-        "AllowedHeaders": ["*"],
-        "AllowedMethods": ["PUT", "POST", "GET"],
-        "AllowedOrigins": [
-            "https://your-vercel-url.vercel.app"
-        ],
-        "ExposeHeaders": []
-    }
+  {
+    "AllowedHeaders": ["*"],
+    "AllowedMethods": ["PUT", "POST", "GET"],
+    "AllowedOrigins": ["https://your-vercel-url.vercel.app"],
+    "ExposeHeaders": []
+  }
 ]
 ```
 
@@ -391,12 +448,14 @@ Before proceeding, verify everything is set up:
 ## 📦 Installation
 
 ### 1. Clone Repository
+
 ```bash
 git clone https://github.com/yourusername/100DaysOpenSource.git
 cd 100DaysOpenSource/AIMeetingAgenda/ai-meeting-assistant
 ```
 
 ### 2. Install Dependencies
+
 ```bash
 npm install
 ```
@@ -422,6 +481,7 @@ DYNAMODB_TABLE_NAME=your_dynamodb_table_name
 ```
 
 **Example `.env.local`:**
+
 ```bash
 OPENAI_API_KEY=sk-proj-abc123...
 AWS_ACCESS_KEY_ID=your_actual_access_key_id
@@ -491,6 +551,7 @@ DYNAMODB_TABLE_NAME=your_dynamodb_table_name
 ```
 
 ⚠️ **CRITICAL SECURITY:**
+
 - Never commit `.env.production` to git
 - Never push Docker image with secrets
 - Use environment variables at runtime only
@@ -594,16 +655,17 @@ docker logs -f <container-id>
 1. Vercel dashboard → **Settings** → **Environment Variables**
 2. Add each variable individually:
 
-| Variable | Value | Type |
-|----------|-------|------|
-| `OPENAI_API_KEY` | `sk-...` | Secret |
-| `AWS_ACCESS_KEY_ID` | `AKIA...` | Secret |
-| `AWS_SECRET_ACCESS_KEY` | Your secret key | Secret |
-| `AWS_REGION` | `us-east-1` | Plain |
-| `S3_BUCKET_NAME` | `your_s3_bucket_name` | Plain |
-| `DYNAMODB_TABLE_NAME` | `your_dynamodb_table_name` | Plain |
+| Variable                | Value                      | Type   |
+| ----------------------- | -------------------------- | ------ |
+| `OPENAI_API_KEY`        | `sk-...`                   | Secret |
+| `AWS_ACCESS_KEY_ID`     | `AKIA...`                  | Secret |
+| `AWS_SECRET_ACCESS_KEY` | Your secret key            | Secret |
+| `AWS_REGION`            | `us-east-1`                | Plain  |
+| `S3_BUCKET_NAME`        | `your_s3_bucket_name`      | Plain  |
+| `DYNAMODB_TABLE_NAME`   | `your_dynamodb_table_name` | Plain  |
 
 **For each variable:**
+
 - Select **Environment:** Production
 - Click **Add**
 
@@ -672,20 +734,21 @@ curl -X POST https://your-vercel-url.vercel.app/api/agenda \
 
 ## 📝 Environment Variables Reference
 
-| Variable | Required | Description | Example | Where to Get |
-|----------|----------|-------------|---------|--------------|
-| `OPENAI_API_KEY` | Yes | OpenAI API key | `sk-proj-...` | [OpenAI Dashboard](https://platform.openai.com/api-keys) |
-| `AWS_ACCESS_KEY_ID` | Yes | AWS IAM access key | `AKIA...` | IAM User Access Keys |
-| `AWS_SECRET_ACCESS_KEY` | Yes | AWS IAM secret key | `wJa...` | IAM User Access Keys |
-| `AWS_REGION` | Yes | AWS region | `us-east-1` | Your AWS region |
-| `S3_BUCKET_NAME` | Yes | S3 bucket name | `your_s3_bucket_name` | S3 Console |
-| `DYNAMODB_TABLE_NAME` | Yes | DynamoDB table | `your_dynamodb_table_name` | DynamoDB Console |
+| Variable                | Required | Description        | Example                    | Where to Get                                             |
+| ----------------------- | -------- | ------------------ | -------------------------- | -------------------------------------------------------- |
+| `OPENAI_API_KEY`        | Yes      | OpenAI API key     | `sk-proj-...`              | [OpenAI Dashboard](https://platform.openai.com/api-keys) |
+| `AWS_ACCESS_KEY_ID`     | Yes      | AWS IAM access key | `AKIA...`                  | IAM User Access Keys                                     |
+| `AWS_SECRET_ACCESS_KEY` | Yes      | AWS IAM secret key | `wJa...`                   | IAM User Access Keys                                     |
+| `AWS_REGION`            | Yes      | AWS region         | `us-east-1`                | Your AWS region                                          |
+| `S3_BUCKET_NAME`        | Yes      | S3 bucket name     | `your_s3_bucket_name`      | S3 Console                                               |
+| `DYNAMODB_TABLE_NAME`   | Yes      | DynamoDB table     | `your_dynamodb_table_name` | DynamoDB Console                                         |
 
 ---
 
 ## 🔒 Security Best Practices
 
 ### ✅ Do's
+
 - ✅ Store secrets in environment variables only
 - ✅ Use `.env.production` locally (never commit)
 - ✅ Use Vercel's secure environment variable manager
@@ -698,6 +761,7 @@ curl -X POST https://your-vercel-url.vercel.app/api/agenda \
 - ✅ Enable CloudTrail for audit logs
 
 ### ❌ Don'ts
+
 - ❌ Commit `.env.production` to git
 - ❌ Hardcode secrets in code
 - ❌ Share API keys in messages
@@ -728,6 +792,7 @@ aws iam delete-access-key \
 ## 🛠️ Development
 
 ### Available Scripts
+
 ```bash
 npm run dev      # Start development server (port 3000)
 npm run build    # Build for production
@@ -739,6 +804,7 @@ npm run format   # Run Prettier
 ## 📚 Resources
 
 ### Official Documentation
+
 - [Next.js Documentation](https://nextjs.org/docs)
 - [OpenAI API Reference](https://platform.openai.com/docs/api-reference)
 - [AWS SDK for JavaScript](https://docs.aws.amazon.com/sdk-for-javascript/)
@@ -747,10 +813,12 @@ npm run format   # Run Prettier
 - [AWS IAM Documentation](https://docs.aws.amazon.com/iam/)
 
 ### Deployment
+
 - [Docker Documentation](https://docs.docker.com/)
 - [Vercel Documentation](https://vercel.com/docs)
 
 ### Security
+
 - [AWS Security Best Practices](https://docs.aws.amazon.com/security/)
 - [CORS Documentation](https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS)
 
@@ -771,4 +839,3 @@ If you find this project helpful or use this work directly, please give proper c
 ## 📄 License
 
 This project is under **[MIT License](LICENSE)**.
-
